@@ -75,7 +75,7 @@ public class Galaxy
     {
         foreach(Planet planet in Planets)
         {
-            if(planet.owner!= null)
+            if (planet.owner!= null)
             {
                 if(planet.PlanetSpecialization == PlanetSpecializations.Homeworld)
                 {
@@ -83,6 +83,38 @@ public class Galaxy
                     planet.owner.Minerals += 2;
                     planet.owner.Research += 2;
                     planet.owner.Transcendite += 2;
+                }
+                if (planet.PlanetSpecialization == PlanetSpecializations.Farm)
+                {
+                    planet.owner.Food += 2 + (int)planet.PlanetSize;
+                    if(planet.PlanetType == PlanetTypes.Terran || planet.PlanetType == PlanetTypes.Tundra)
+                    {
+                        planet.owner.Food += 2;
+                    }
+                }
+                if (planet.PlanetSpecialization == PlanetSpecializations.Mine)
+                {
+                    planet.owner.Minerals += 2 + (int)planet.PlanetSize;
+                    if (planet.PlanetType == PlanetTypes.Jungle || planet.PlanetType == PlanetTypes.Swamp)
+                    {
+                        planet.owner.Minerals += 2;
+                    }
+                }
+                if (planet.PlanetSpecialization == PlanetSpecializations.Lab)
+                {
+                    planet.owner.Research += 2 + (int)planet.PlanetSize;
+                    if (planet.PlanetType == PlanetTypes.Ocean || planet.PlanetType == PlanetTypes.Ice)
+                    {
+                        planet.owner.Research += 2;
+                    }
+                }
+                if (planet.PlanetSpecialization == PlanetSpecializations.Temple)
+                {
+                    planet.owner.Transcendite += 2 + (int)planet.PlanetSize;
+                    if (planet.PlanetType == PlanetTypes.Arid || planet.PlanetType == PlanetTypes.Desert)
+                    {
+                        planet.owner.Transcendite += 2;
+                    }
                 }
                 planet.owner.Food -= 1;
             }

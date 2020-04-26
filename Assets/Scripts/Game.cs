@@ -1,11 +1,13 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class Game : MonoBehaviour
 {
     Galaxy Galaxy = new Galaxy();
     public GameObject planetTemplate;
+    public Text textTemplate;
     // Start is called before the first frame update
     void Start()
     {
@@ -13,8 +15,12 @@ public class Game : MonoBehaviour
         foreach(Planet planet in Galaxy.Planets)
         {
             GameObject goPlanet;
+            Text goText;
             goPlanet = Instantiate(planetTemplate);
+            goText = Instantiate(textTemplate);
+            goText.text = "PlanetName";
             planet.guiPlanet = goPlanet;
+            planet.guiText = goText;
             print("Planet generated at: " + planet.Location.x + " " + planet.Location.y+ " with size: "+ planet.PlanetSize);
             float xPositionOnGrid = planet.Location.x - Galaxy.GalaxyWidth / 2.0f;
             float yPositionOnGrid = planet.Location.y - Galaxy.GalaxyHeight / 2.0f;
@@ -62,6 +68,11 @@ public class Game : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        foreach(Planet pl in Galaxy.Planets)
+        {
+            pl.guiText.transform.position = Camera.main.WorldToScreenPoint(pl.guiPlanet.transform.position);
+        }
+
         if (Input.GetMouseButtonDown(0))
         {
             Vector3 wp = Camera.main.ScreenToWorldPoint(Input.mousePosition);

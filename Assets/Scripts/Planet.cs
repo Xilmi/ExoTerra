@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public enum PlanetSizes
 {
@@ -36,6 +37,7 @@ public enum PlanetSpecializations
 public class Planet
 {
     public GameObject guiPlanet;
+    public Text guiText;
     // Start is called before the first frame update
     public Empire owner;
     public PlanetSizes PlanetSize;
@@ -44,6 +46,7 @@ public class Planet
     public PlanetSpecializations SwitchingToSpecialization;
     public int RemainingSwitchDuration;
     public Vector3 Location;
+    public string Name;
     public void changeOwner(Empire newOwner)
     {
         owner = newOwner;
