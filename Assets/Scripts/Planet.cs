@@ -59,4 +59,10 @@ public class Planet
             guiPlanet.GetComponent<SpriteRenderer>().color = owner.empireColor;
         }
     }
+    public void setHomeworld(Empire homeWorldOf)
+    {
+        changeOwner(homeWorldOf);
+        PlanetSpecialization = PlanetSpecializations.Homeworld;
+        Name = homeWorldOf.EmpireName;
+    }
 }

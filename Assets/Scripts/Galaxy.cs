@@ -37,7 +37,7 @@ public class Galaxy
                 continue;
             }
             pl.PlanetSize = (PlanetSizes)Random.Range((int)PlanetSizes.Small, (int)PlanetSizes.LastVal);
-            pl.PlanetSpecialization = PlanetSpecializations.Homeworld;
+            pl.PlanetSpecialization = PlanetSpecializations.None;
             pl.PlanetType = (PlanetTypes)Random.Range((int)PlanetTypes.Terran, (int)PlanetTypes.LastVal);
             pl.owner = null;
             Planets.Add(pl);
@@ -55,6 +55,7 @@ public class Galaxy
         empire2.HomeWold = "Liquor";
         empire2.iD = 1;
         empire2.empireColor = Color.blue;
+        empire2.isAIControlled = true;
         Empires.Add(empire2);
         Empire empire3 = new Empire();
         empire3.EmpireName = "Imperium";
@@ -62,6 +63,7 @@ public class Galaxy
         empire3.HomeWold = "Roma";
         empire3.iD = 2;
         empire3.empireColor = Color.magenta;
+        empire3.isAIControlled = true;
         Empires.Add(empire3);
         Empire empire4 = new Empire();
         empire4.EmpireName = "Femen";
@@ -69,6 +71,7 @@ public class Galaxy
         empire4.HomeWold = "Afrakis";
         empire4.iD = 3;
         empire4.empireColor = Color.yellow;
+        empire4.isAIControlled = true;
         Empires.Add(empire4);
     }
     public void ProcessTurn()
@@ -119,8 +122,59 @@ public class Galaxy
                 planet.owner.Food -= 1;
             }
         }
+        updateGUI();
+    }
+    public void Colonize(Planet planetToColonize, Empire empireToColonize)
+    {
+        if (planetToColonize.owner != null)
+        {
+            Game.printToConsole("can't colonize planet as it's already owned");
+            return;
+        }
+        Planet closestBase;
+        float minDistance = Mathf.Sqrt(Mathf.Pow(GalaxyWidth,2) + Mathf.Pow(GalaxyHeight,2));
+        foreach (Planet pl in Planets)
+        {
+            if(pl.owner == empireToColonize)
+            {
+                if(pl.PlanetSpecialization == PlanetSpecializations.Homeworld || pl.PlanetSpecialization == PlanetSpecializations.Homeworld)
+                {
+                    float currDistance = Vector3.Distance(pl.Location, planetToColonize.Location);
+                    if(currDistance < minDistance)
+                    {
+                        closestBase = pl;
+                        minDistance = currDistance;
+                    }
+                }
+            }
+        }
+        int foodCost = Mathf.FloorToInt(minDistance);
+        int mineralCost = 5;
+        if(empireToColonize.Food < foodCost)
+        {
+            Game.printToConsole("Not enough food "+empireToColonize.Food+" of "+foodCost+" to colonize");
+        }
+        else if (empireToColonize.Minerals < mineralCost)
+        {
+            Game.printToConsole("Not enough minerals " + empireToColonize.Minerals + " of " + mineralCost + " to colonize");
+        }
+        else
+        {
+            planetToColonize.RemainingSwitchDuration = foodCost;
+            planetToColonize.changeOwner(empireToColonize);
+            planetToColonize.PlanetSpecialization = PlanetSpecializations.Homeworld;
+            empireToColonize.Food -= foodCost;
+            empireToColonize.Minerals -= mineralCost;
+        }
+        updateGUI();
+    }
+    public void updateGUI()
+    {
         GameObject go = GameObject.Find("Score");
         TextMeshProUGUI tm = go.GetComponent<TextMeshProUGUI>();
-        tm.text = Empires[0].EmpireName + " Food: " + Empires[0].Food;
+        tm.text = Empires[0].EmpireName + " Food: " + Empires[0].Food + " Minerals: " + Empires[0].Minerals + " My Score: " + Empires[0].Transcendite + "\n"
+            + Empires[1].EmpireName + " Score: " + Empires[1].Transcendite + "\n"
+            + Empires[2].EmpireName + " Score: " + Empires[2].Transcendite + "\n"
+            + Empires[3].EmpireName + " Score: " + Empires[3].Transcendite;
     }
 }

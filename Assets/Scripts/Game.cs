@@ -6,12 +6,15 @@ using UnityEngine.UI;
 public class Game : MonoBehaviour
 {
     Galaxy Galaxy = new Galaxy();
+    AI AI = new AI();
     public GameObject planetTemplate;
     public Text textTemplate;
     // Start is called before the first frame update
     void Start()
     {
-        Galaxy.Generate(100,100,1f);
+        Galaxy.Generate(30,30,1f);
+        AI.gal = Galaxy;
+        int Homeworldsassigned = 0;
         foreach(Planet planet in Galaxy.Planets)
         {
             GameObject goPlanet;
@@ -60,8 +63,13 @@ public class Game : MonoBehaviour
             {
                 SpriteString = "planet_076";
             }
-            Sprite sprite = Resources.Load<Sprite>("105 Colorful 2D Planet Icons/" + SpriteString);
+            Sprite sprite = Resources.Load<Sprite>("105 Colorful 2D Planet Icons/" + "planet_051");
             goPlanet.GetComponent<SpriteRenderer>().sprite = sprite;
+            if(Homeworldsassigned < Galaxy.Empires.Count)
+            {
+                planet.setHomeworld(Galaxy.Empires[Homeworldsassigned]);
+                ++Homeworldsassigned;
+            }
         }
     }
 
@@ -91,22 +99,7 @@ public class Game : MonoBehaviour
                 {
                     if (planet.guiPlanet == goClicked)
                     {
-                        if (planet.owner != null)
-                        {
-                            print("Next iD would be: " + (planet.owner.iD + 1) + " Empirecount: " + Galaxy.Empires.Count);
-                            if (planet.owner.iD + 1 < Galaxy.Empires.Count)
-                            {
-                                planet.changeOwner(Galaxy.Empires[planet.owner.iD + 1]);
-                            }
-                            else
-                            {
-                                planet.changeOwner(null);
-                            }
-                        }
-                        else
-                        {
-                            planet.changeOwner(Galaxy.Empires[0]);
-                        }
+                        Galaxy.Colonize(planet,Galaxy.Empires[0]);
                         if (planet.owner != null)
                         {
                             print("Planet: Size: " + planet.PlanetSize + " Type: " + planet.PlanetType + " Owner: " + planet.owner.EmpireName + " iD: " + planet.owner.iD);
@@ -145,6 +138,17 @@ public class Game : MonoBehaviour
 
     public void ProcessTurn()
     {
+        foreach (Empire emp in Galaxy.Empires)
+        {
+            if (emp.isAIControlled)
+            {
+                AI.executeAI(emp);
+            }
+        }
         Galaxy.ProcessTurn();
+    }
+    static public void printToConsole(string textToPrint)
+    {
+        print(textToPrint);
     }
 }
