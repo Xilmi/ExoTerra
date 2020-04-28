@@ -11,6 +11,8 @@ public class Galaxy
     //width and hight in lightyers, density in stars per square-parsec (3x3 lightyears)
     public float GalaxyWidth;
     public float GalaxyHeight;
+    public int MinTranscendence;
+    public int TranscenditeToWin;
     public void Generate(float width, float height, float density)
     {
         GalaxyWidth = width;
@@ -43,10 +45,11 @@ public class Galaxy
             Planets.Add(pl);
         }
         Empire empire = new Empire();
-        empire.EmpireName = "Vegans";
+        empire.EmpireName = "You";
         empire.RulerName = "Vegany";
         empire.HomeWold = "Vega";
         empire.iD = 0;
+        empire.isAIControlled = false;
         empire.empireColor = Color.green;
         Empires.Add(empire);
         Empire empire2 = new Empire();
@@ -76,60 +79,59 @@ public class Galaxy
     }
     public void ProcessTurn()
     {
-        foreach(Planet planet in Planets)
+        foreach (Empire empire in Empires)
         {
+            empire.ResetPerTurnValues();
+        }
+        bool setMinTranscendence = false;
+        if(MinTranscendence == 0)
+        {
+            setMinTranscendence = true;
+        }
+        foreach (Planet planet in Planets)
+        {
+            if(setMinTranscendence == true)
+            {
+                MinTranscendence += 2;
+            }
             if (planet.owner!= null)
             {
-                if(planet.PlanetSpecialization == PlanetSpecializations.Homeworld)
-                {
-                    planet.owner.Food += 2;
-                    planet.owner.Minerals += 2;
-                    planet.owner.Research += 2;
-                    planet.owner.Transcendite += 2;
-                }
-                if (planet.PlanetSpecialization == PlanetSpecializations.Farm)
-                {
-                    planet.owner.Food += 2 + (int)planet.PlanetSize;
-                    if(planet.PlanetType == PlanetTypes.Terran || planet.PlanetType == PlanetTypes.Tundra)
-                    {
-                        planet.owner.Food += 2;
-                    }
-                }
-                if (planet.PlanetSpecialization == PlanetSpecializations.Mine)
-                {
-                    planet.owner.Minerals += 2 + (int)planet.PlanetSize;
-                    if (planet.PlanetType == PlanetTypes.Jungle || planet.PlanetType == PlanetTypes.Swamp)
-                    {
-                        planet.owner.Minerals += 2;
-                    }
-                }
-                if (planet.PlanetSpecialization == PlanetSpecializations.Lab)
-                {
-                    planet.owner.Research += 2 + (int)planet.PlanetSize;
-                    if (planet.PlanetType == PlanetTypes.Ocean || planet.PlanetType == PlanetTypes.Ice)
-                    {
-                        planet.owner.Research += 2;
-                    }
-                }
-                if (planet.PlanetSpecialization == PlanetSpecializations.Temple)
-                {
-                    planet.owner.Transcendite += 2 + (int)planet.PlanetSize;
-                    if (planet.PlanetType == PlanetTypes.Arid || planet.PlanetType == PlanetTypes.Desert)
-                    {
-                        planet.owner.Transcendite += 2;
-                    }
-                }
-                planet.owner.Food -= 1;
+                planet.processTurn();
             }
         }
+        int highestTranscendite = 0;
+        int secondHighestTranscendite = MinTranscendence;
+        Empire highestTranscenditeEmpire = null;
+        foreach (Empire empire in Empires)
+        {
+            empire.ProcessTurn();
+            if(empire.Transcendite > highestTranscendite)
+            {
+                highestTranscendite = empire.Transcendite;
+                highestTranscenditeEmpire = empire;
+            }
+        }
+        foreach(Empire sec in Empires)
+        {
+            if(sec == highestTranscenditeEmpire)
+            {
+                continue;
+            }
+            if(sec.Transcendite > secondHighestTranscendite)
+            {
+                secondHighestTranscendite = sec.Transcendite;
+            }
+        }
+        TranscenditeToWin = Mathf.Max(secondHighestTranscendite * 2, MinTranscendence);
         updateGUI();
     }
-    public void Colonize(Planet planetToColonize, Empire empireToColonize)
+    public bool Colonize(Planet planetToColonize, Empire empireToColonize)
     {
+        bool colonizationSuccessfull = false;
         if (planetToColonize.owner != null)
         {
             Game.printToConsole("can't colonize planet as it's already owned");
-            return;
+            return false;
         }
         Planet closestBase;
         float minDistance = Mathf.Sqrt(Mathf.Pow(GalaxyWidth,2) + Mathf.Pow(GalaxyHeight,2));
@@ -137,7 +139,7 @@ public class Galaxy
         {
             if(pl.owner == empireToColonize)
             {
-                if(pl.PlanetSpecialization == PlanetSpecializations.Homeworld || pl.PlanetSpecialization == PlanetSpecializations.Homeworld)
+                if(pl.PlanetSpecialization == PlanetSpecializations.Homeworld || pl.PlanetSpecialization == PlanetSpecializations.Outpost)
                 {
                     float currDistance = Vector3.Distance(pl.Location, planetToColonize.Location);
                     if(currDistance < minDistance)
@@ -162,19 +164,73 @@ public class Galaxy
         {
             planetToColonize.RemainingSwitchDuration = foodCost;
             planetToColonize.changeOwner(empireToColonize);
-            planetToColonize.PlanetSpecialization = PlanetSpecializations.Homeworld;
             empireToColonize.Food -= foodCost;
             empireToColonize.Minerals -= mineralCost;
+            colonizationSuccessfull = true;
         }
         updateGUI();
+        return colonizationSuccessfull;
     }
     public void updateGUI()
     {
         GameObject go = GameObject.Find("Score");
         TextMeshProUGUI tm = go.GetComponent<TextMeshProUGUI>();
-        tm.text = Empires[0].EmpireName + " Food: " + Empires[0].Food + " Minerals: " + Empires[0].Minerals + " My Score: " + Empires[0].Transcendite + "\n"
-            + Empires[1].EmpireName + " Score: " + Empires[1].Transcendite + "\n"
-            + Empires[2].EmpireName + " Score: " + Empires[2].Transcendite + "\n"
-            + Empires[3].EmpireName + " Score: " + Empires[3].Transcendite;
+        tm.text = "Food: " + Empires[0].Food + " (+" + Empires[0].FoodPerTurn + " -" + Empires[0].FoodMaintainance + ")"
+            +"\nMinerals: " + Empires[0].Minerals + " (+" + Empires[0].MineralsPerTurn + ")" 
+            + "\nScore: " + Empires[0].Transcendite + " (+" + Empires[0].TranscenditePerTurn + ")" + " / "+TranscenditeToWin+"\n"
+            //+ "FoodValue: " + Empires[0].FoodValue +"\n"
+            //+ "MineralValue: " + Empires[0].MineralValue + "\n"
+            //+ "OutpostValue: " + Empires[0].OutpostValue + "\n"
+            + Empires[1].EmpireName + " Score: " + Empires[1].Transcendite + " / " + TranscenditeToWin+ "\n"
+            + Empires[2].EmpireName + " Score: " + Empires[2].Transcendite + " / " + TranscenditeToWin + "\n"
+            + Empires[3].EmpireName + " Score: " + Empires[3].Transcendite + " / " + TranscenditeToWin + "\n";
+        foreach (Planet pl in Planets)
+        {
+            pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text = pl.PlanetType.ToString() + "\n";
+            if (pl.owner == null)
+            {
+                continue;
+            }
+            if (pl.RemainingSwitchDuration > 0)
+            {
+                pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text += pl.RemainingSwitchDuration.ToString() + " - " + pl.SwitchingToSpecialization;
+            }
+            else
+            {
+                pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text += pl.PlanetSpecialization.ToString() + " +"+pl.Output;
+            }
+        }
+    }
+    public int GetColonyCount(Empire emp)
+    {
+        int count = 0;
+        foreach(Planet pl in Planets)
+        {
+            if(pl.owner == emp)
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+    public void SwitchSpecialization(Planet pl, PlanetSpecializations spec, Empire emp)
+    {
+        if (pl != null)
+        {
+            if (pl.owner == emp)
+            {
+                if (pl.RemainingSwitchDuration == 0 || pl.PlanetSpecialization == PlanetSpecializations.None)
+                {
+                    if (pl.PlanetSpecialization != PlanetSpecializations.Homeworld)
+                    {
+                        pl.SwitchingToSpecialization = spec;
+                        if (pl.PlanetSpecialization != PlanetSpecializations.None)
+                        {
+                            pl.RemainingSwitchDuration = GetColonyCount(emp) - 1;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
