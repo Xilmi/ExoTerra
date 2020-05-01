@@ -79,7 +79,7 @@ public class AI
                     }
                 }
             }
-            if(bestSource == null || bestDestination == null || bestPairDistance > emp.Food || emp.Minerals < 5)
+            if(bestSource == null || bestDestination == null || bestPairDistance > emp.Food || emp.Minerals < 5 || emp.Transcendite < 1)
             {
                 StillSeekPairings = false;
             } 

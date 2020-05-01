@@ -14,6 +14,7 @@ public class Empire
     public int FoodMaintainance;
     public int Minerals;
     public int MineralsPerTurn;
+    public int MineralMaintainance;
     public int Research;
     public int ResearchPerTurn;
     public int Transcendite;
@@ -26,12 +27,19 @@ public class Empire
     public Color empireColor;
     public bool isAIControlled;
 
+    public void Init()
+    {
+        Food = 2;
+        Minerals = 2;
+        Research = 2;
+        Transcendite = 2;
+    }
     public void ProcessTurn()
     {
-        Food += FoodPerTurn - FoodMaintainance;
-        Minerals += MineralsPerTurn;
-        Research += ResearchPerTurn;
-        Transcendite += TranscenditePerTurn;
+        Food -= FoodMaintainance;
+        Minerals -= MineralMaintainance;
+        Food = Mathf.Max(Food, 0);
+        Minerals = Mathf.Max(Minerals, 0);
     }
     public void ResetPerTurnValues()
     {
@@ -40,5 +48,6 @@ public class Empire
         ResearchPerTurn = 0;
         TranscenditePerTurn = 0;
         FoodMaintainance = 0;
+        MineralMaintainance = 0;
     }
 }

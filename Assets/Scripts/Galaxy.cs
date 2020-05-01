@@ -8,11 +8,13 @@ public class Galaxy
 {
     public List<Planet> Planets = new List<Planet>();
     public List<Empire> Empires = new List<Empire>();
+    public List<Fleet> Fleets = new List<Fleet>();
     //width and hight in lightyers, density in stars per square-parsec (3x3 lightyears)
     public float GalaxyWidth;
     public float GalaxyHeight;
     public int MinTranscendence;
     public int TranscenditeToWin;
+    public Game parent;
     public void Generate(float width, float height, float density)
     {
         GalaxyWidth = width;
@@ -88,15 +90,55 @@ public class Galaxy
         {
             setMinTranscendence = true;
         }
+        List<Fleet> markedForDeletion = new List<Fleet>();
+        foreach (Fleet fleet in Fleets)
+        {
+            fleet.processTurn();
+            if(fleet.location == null && fleet.destination == null)
+            {
+                markedForDeletion.Add(fleet);
+            }
+        }
+        foreach(Fleet del in markedForDeletion)
+        {
+            if(parent.lastSelectedFleet == del)
+            {
+                parent.lastSelectedFleet = null;
+            }
+            GameObject.Destroy(del.guiFleet);
+            Fleets.Remove(del);
+        }
         foreach (Planet planet in Planets)
         {
-            if(setMinTranscendence == true)
+            if (setMinTranscendence == true)
             {
                 MinTranscendence += 2;
             }
-            if (planet.owner!= null)
+            if (planet.owner != null)
             {
+                if(planet.freeSwitchAvailable)
+                {
+                    if (planet.owner.isAIControlled == false)
+                    {
+                        parent.CenterView(planet.guiPlanet.transform.position);
+                        parent.lastSelected = planet;
+                        updateGUI();
+                        parent.SelectionTemplate.SetActive(true);
+                    }
+                }
                 planet.processTurn();
+            }
+            while (planet.Production >= 5)
+            {
+                planet.Production -= 5;
+                if (planet.FleetInOrbit != null)
+                {
+                    planet.FleetInOrbit.ShipCount += 1;
+                }
+                else
+                {
+                    CreateFleet(planet.owner, planet, 1);
+                }
             }
         }
         int highestTranscendite = 0;
@@ -133,7 +175,7 @@ public class Galaxy
             Game.printToConsole("can't colonize planet as it's already owned");
             return false;
         }
-        Planet closestBase;
+        Planet closestBase = null;
         float minDistance = Mathf.Sqrt(Mathf.Pow(GalaxyWidth,2) + Mathf.Pow(GalaxyHeight,2));
         foreach (Planet pl in Planets)
         {
@@ -150,8 +192,13 @@ public class Galaxy
                 }
             }
         }
-        int foodCost = Mathf.FloorToInt(minDistance);
+        if(closestBase == null)
+        {
+            return colonizationSuccessfull;
+        }
+        int foodCost = Mathf.CeilToInt(minDistance);
         int mineralCost = 5;
+        int transcenditeCost = 1;
         if(empireToColonize.Food < foodCost)
         {
             Game.printToConsole("Not enough food "+empireToColonize.Food+" of "+foodCost+" to colonize");
@@ -160,12 +207,19 @@ public class Galaxy
         {
             Game.printToConsole("Not enough minerals " + empireToColonize.Minerals + " of " + mineralCost + " to colonize");
         }
+        else if(empireToColonize.Transcendite < transcenditeCost)
+        {
+            Game.printToConsole("Not enough minerals " + empireToColonize.Transcendite + " of " + transcenditeCost + " to colonize");
+        }
         else
         {
-            planetToColonize.RemainingSwitchDuration = foodCost;
-            planetToColonize.changeOwner(empireToColonize);
+            Fleet colo = new Fleet();
+            colo.SpawnColonization(closestBase, planetToColonize);
+            Fleets.Add(colo);
+            parent.DrawFleets();
             empireToColonize.Food -= foodCost;
             empireToColonize.Minerals -= mineralCost;
+            empireToColonize.Transcendite -= transcenditeCost;
             colonizationSuccessfull = true;
         }
         updateGUI();
@@ -176,11 +230,8 @@ public class Galaxy
         GameObject go = GameObject.Find("Score");
         TextMeshProUGUI tm = go.GetComponent<TextMeshProUGUI>();
         tm.text = "Food: " + Empires[0].Food + " (+" + Empires[0].FoodPerTurn + " -" + Empires[0].FoodMaintainance + ")"
-            +"\nMinerals: " + Empires[0].Minerals + " (+" + Empires[0].MineralsPerTurn + ")" 
+            +"\nMinerals: " + Empires[0].Minerals + " (+" + Empires[0].MineralsPerTurn + " -"+Empires[0].MineralMaintainance+")" 
             + "\nScore: " + Empires[0].Transcendite + " (+" + Empires[0].TranscenditePerTurn + ")" + " / "+TranscenditeToWin+"\n"
-            //+ "FoodValue: " + Empires[0].FoodValue +"\n"
-            //+ "MineralValue: " + Empires[0].MineralValue + "\n"
-            //+ "OutpostValue: " + Empires[0].OutpostValue + "\n"
             + Empires[1].EmpireName + " Score: " + Empires[1].Transcendite + " / " + TranscenditeToWin+ "\n"
             + Empires[2].EmpireName + " Score: " + Empires[2].Transcendite + " / " + TranscenditeToWin + "\n"
             + Empires[3].EmpireName + " Score: " + Empires[3].Transcendite + " / " + TranscenditeToWin + "\n";
@@ -189,8 +240,10 @@ public class Galaxy
             pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text = pl.PlanetType.ToString() + "\n";
             if (pl.owner == null)
             {
+                pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().color = Color.white;
                 continue;
             }
+            pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().color = pl.owner.empireColor;
             if (pl.RemainingSwitchDuration > 0)
             {
                 pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text += pl.RemainingSwitchDuration.ToString() + " - " + pl.SwitchingToSpecialization;
@@ -198,6 +251,22 @@ public class Galaxy
             else
             {
                 pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text += pl.PlanetSpecialization.ToString() + " +"+pl.Output;
+            }
+        }
+        foreach (Fleet fl in Fleets)
+        {
+            if (fl.guiFleet != null)
+            {
+                if(fl.destination != null)
+                {
+                    float distance = Vector3.Distance(fl.destination.guiPlanet.transform.localPosition, fl.location.guiPlanet.transform.localPosition);
+                    Vector3 drawLocation = fl.destination.guiPlanet.transform.localPosition + (fl.location.guiPlanet.transform.localPosition - fl.destination.guiPlanet.transform.localPosition) * fl.eta / distance;
+                    fl.guiFleet.transform.position = drawLocation;
+                }
+                if (fl.FleetType == FleetTypes.Combat)
+                {
+                    fl.guiFleet.transform.GetChild(0).GetComponent<TextMeshPro>().text = fl.ShipCount + "\n";
+                }
             }
         }
     }
@@ -223,14 +292,56 @@ public class Galaxy
                 {
                     if (pl.PlanetSpecialization != PlanetSpecializations.Homeworld)
                     {
-                        pl.SwitchingToSpecialization = spec;
-                        if (pl.PlanetSpecialization != PlanetSpecializations.None)
+                        if (pl.freeSwitchAvailable)
                         {
-                            pl.RemainingSwitchDuration = GetColonyCount(emp) - 1;
+                            pl.PlanetSpecialization = spec;
+                            pl.freeSwitchAvailable = false;
+                            pl.processTurn();
+                            pl.owner.ResetPerTurnValues();
+                        }
+                        else
+                        {
+                            pl.SwitchingToSpecialization = spec;
+                            if (pl.PlanetSpecialization != PlanetSpecializations.None)
+                            {
+                                pl.RemainingSwitchDuration = GetColonyCount(emp) - 1;
+                            }
                         }
                     }
                 }
             }
         }
+    }
+    public void SendFleet(Fleet fleet, Planet from, Planet to)
+    {
+        if (fleet.owner.Transcendite > 0 && from != to)
+        {
+            fleet.destination = to;
+            fleet.eta = Mathf.CeilToInt(Vector3.Distance(from.Location, to.Location));
+            from.FleetInOrbit = null;
+            fleet.owner.Transcendite -= 1;
+            updateGUI();
+        }
+    }
+    public void CreateFleet(Empire owner, Planet location, int ships)
+    {
+        Fleet NewFleet = new Fleet();
+        NewFleet.Spawn(location);
+        NewFleet.owner = owner;
+        NewFleet.ShipCount = ships;
+        Fleets.Add(NewFleet);
+    }
+    public bool AlreadyBeingColonized(Planet testPlanet, Empire emp)
+    {
+        bool already = false;
+        foreach (Fleet fleet in Fleets)
+        {
+            if (fleet.destination == testPlanet && fleet.FleetType == FleetTypes.Colonization && fleet.owner == emp)
+            {
+                already = true;
+                break;
+            }
+        }
+        return already;
     }
 }

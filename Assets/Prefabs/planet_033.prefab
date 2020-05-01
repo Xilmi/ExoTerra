@@ -100,7 +100,7 @@ Halo:
   m_Enabled: 0
   m_Color:
     serializedVersion: 2
-    rgba: 4283039742
+    rgba: 4291361279
   m_Size: 2
 --- !u!58 &8552746300986935606
 CircleCollider2D:

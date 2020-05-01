@@ -65,6 +65,7 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\AI.cs" />
     <Compile Include="Assets\Scripts\Empire.cs" />
+    <Compile Include="Assets\Scripts\Fleet.cs" />
     <Compile Include="Assets\Scripts\Galaxy.cs" />
     <Compile Include="Assets\Scripts\Game.cs" />
     <Compile Include="Assets\Scripts\Planet.cs" />
