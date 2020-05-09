@@ -13,20 +13,17 @@ public enum PlanetSizes
 public enum PlanetTypes
 {
     Terran,
-    Arid,
     Ocean,
-    Jungle,
-    Tundra,
     Desert,
+    Tundra,
     Ice,
-    Swamp,
+    Barren,
     LastVal
 }
 public enum PlanetSpecializations
 {
     None,
     Homeworld,
-    Farm,
     Mine,
     Outpost,
     Lab,
@@ -44,7 +41,6 @@ public class Planet
     public PlanetSpecializations PlanetSpecialization;
     public PlanetSpecializations SwitchingToSpecialization;
     public int RemainingSwitchDuration;
-    public int Output;
     public Vector3 Location;
     public bool producing = false;
     public Fleet FleetInOrbit;
@@ -53,47 +49,115 @@ public class Planet
     public void Colonize(Empire emp)
     {
         owner = emp;
-        freeSwitchAvailable = true;
+        if (PlanetSpecialization == PlanetSpecializations.None)
+        {
+            freeSwitchAvailable = true;
+        }
     }
-    public double GetSizeValueMultiplier()
+    public int GetTypeTechBonus(Empire emp)
     {
-        return 1 + 0.5 * (int)PlanetSize;
-    }
-    public double GetFoodValueMultiplier()
-    {
-        double ret = GetSizeValueMultiplier();
+        int ret = 0;
         if (PlanetType == PlanetTypes.Terran || PlanetType == PlanetTypes.Tundra)
         {
-            ret += 1; 
+            ret += emp.GreenPlanetBonus;
         }
-        return ret;
-    }
-    public double GetMineralValueMultiplier()
-    {
-        double ret = GetSizeValueMultiplier();
-        if (PlanetType == PlanetTypes.Jungle || PlanetType == PlanetTypes.Swamp)
-        {
-            ret += 1;
-        }
-        return ret;
-    }
-    public double GetResearchValueMultiplier()
-    {
-        double ret = GetSizeValueMultiplier();
         if (PlanetType == PlanetTypes.Ocean || PlanetType == PlanetTypes.Ice)
         {
-            ret += 1;
+            ret += emp.BluePlanetBonus;
+        }
+        if (PlanetType == PlanetTypes.Desert || PlanetType == PlanetTypes.Barren)
+        {
+            ret += emp.DryPlanetBonus;
         }
         return ret;
     }
-    public double GetTranscenditeValueMultiplier()
+    public int GetSizeValueMultiplier(Empire emp)
     {
-        double ret = GetSizeValueMultiplier();
-        if (PlanetType == PlanetTypes.Arid || PlanetType == PlanetTypes.Desert)
+        return 2 + (int)PlanetSize + GetTypeTechBonus(emp);
+    }
+    public int GetMineralValueMultiplier(Empire emp)
+    {
+        int ret = GetSizeValueMultiplier(emp);
+        if (PlanetType == PlanetTypes.Terran || PlanetType == PlanetTypes.Tundra)
         {
-            ret += 1;
+            ret += 2; 
         }
         return ret;
+    }
+    public int GetMineralOutput(Empire emp)
+    {
+        int value = 0;
+        if(PlanetSpecialization == PlanetSpecializations.Homeworld)
+        {
+            value = 3 + emp.HomeWorldBonus;
+        }
+        else if(PlanetSpecialization == PlanetSpecializations.Mine)
+        {
+            value = GetMineralValueMultiplier(emp) + emp.MineMineralBonus;
+        }
+        return value;
+    }
+    public int GetResearchValueMultiplier(Empire emp)
+    {
+        int ret = GetSizeValueMultiplier(emp);
+        if (PlanetType == PlanetTypes.Ocean || PlanetType == PlanetTypes.Ice)
+        {
+            ret += 2;
+        }
+        return ret;
+    }
+    public int GetResearchOutput(Empire emp)
+    {
+        int value = 0;
+        if (PlanetSpecialization == PlanetSpecializations.Homeworld)
+        {
+            value = 3 + emp.HomeWorldBonus;
+        }
+        else if (PlanetSpecialization == PlanetSpecializations.Lab)
+        {
+            value = GetResearchValueMultiplier(emp) + emp.LabResearchBonus;
+        }
+        return value;
+    }
+    public int GetTranscenditeValueMultiplier(Empire emp)
+    {
+        int ret = GetSizeValueMultiplier(emp);
+        if (PlanetType == PlanetTypes.Desert || PlanetType == PlanetTypes.Barren)
+        {
+            ret += 2;
+        }
+        return ret;
+    }
+    public int GetTranscenditeOutput(Empire emp)
+    {
+        int value = 0;
+        if (PlanetSpecialization == PlanetSpecializations.Homeworld)
+        {
+            value = 3 + emp.HomeWorldBonus;
+        }
+        else if (PlanetSpecialization == PlanetSpecializations.Temple)
+        {
+            value = GetTranscenditeValueMultiplier(emp) + emp.TempleTranscenditeBonus;
+        }
+        return value;
+    }
+    public int GetOutpostValueMultiplier(Empire emp)
+    {
+        int ret = GetSizeValueMultiplier(emp);
+        return ret;
+    }
+    public int GetProductionOutput(Empire emp)
+    {
+        int value = 0;
+        if (PlanetSpecialization == PlanetSpecializations.Homeworld)
+        {
+            value = 3 + emp.HomeWorldBonus + emp.ProductionBonus;
+        }
+        else if (PlanetSpecialization == PlanetSpecializations.Outpost)
+        {
+            value = GetOutpostValueMultiplier(emp) + emp.ProductionBonus;
+        }
+        return value;
     }
     public void changeOwner(Empire newOwner)
     {
@@ -116,82 +180,12 @@ public class Planet
         }
         if (RemainingSwitchDuration == 0)
         {
-            if (PlanetSpecialization == PlanetSpecializations.Homeworld)
+            if (producing)
             {
-                owner.Food += 2;
-                owner.Minerals += 2;
-                owner.Research += 2;
-                owner.Transcendite += 2;
-                owner.FoodPerTurn += 2;
-                owner.MineralsPerTurn += 2;
-                owner.ResearchPerTurn += 2;
-                owner.TranscenditePerTurn += 2;
+                int prod = Mathf.Min(GetProductionOutput(owner), owner.Minerals - owner.MineralsSpentOnProductionThisTurn);
+                owner.MineralsSpentOnProductionThisTurn += prod;
+                Production += prod;
             }
-            if (PlanetSpecialization == PlanetSpecializations.Farm)
-            {
-                Output = 2 + (int)PlanetSize;
-                if (PlanetType == PlanetTypes.Terran || PlanetType == PlanetTypes.Tundra)
-                {
-                    Output += 2;
-                }
-                owner.Food += Output;
-                owner.FoodPerTurn += Output;
-            }
-            if (PlanetSpecialization == PlanetSpecializations.Mine)
-            {
-                Output = 2 + (int)PlanetSize;
-                if (PlanetType == PlanetTypes.Jungle || PlanetType == PlanetTypes.Swamp)
-                {
-                    Output += 2;
-                }
-                owner.Minerals += Output;
-                owner.MineralsPerTurn += Output;
-            }
-            if (PlanetSpecialization == PlanetSpecializations.Lab)
-            {
-                Output = 2 + (int)PlanetSize;
-                if (PlanetType == PlanetTypes.Ocean || PlanetType == PlanetTypes.Ice)
-                {
-                    Output += 2;
-                }
-                owner.Research += Output;
-                owner.ResearchPerTurn += Output;
-            }
-            if (PlanetSpecialization == PlanetSpecializations.Temple)
-            {
-                Output = 2 + (int)PlanetSize;
-                if (PlanetType == PlanetTypes.Arid || PlanetType == PlanetTypes.Desert)
-                {
-                    Output += 2;
-                }
-                owner.Transcendite += Output;
-                owner.TranscenditePerTurn += Output;
-            }
-            if (RemainingSwitchDuration == 0)
-            {
-                if (producing)
-                {
-                    int ProductionOutput = 0;
-                    if (PlanetSpecialization == PlanetSpecializations.Outpost)
-                    {
-                        ProductionOutput = 2 + (int)PlanetSize;
-                    }
-                    if (PlanetSpecialization == PlanetSpecializations.Homeworld)
-                    {
-                        ProductionOutput = 2;
-                    }
-                    ProductionOutput = Mathf.Max(0, Mathf.Min(ProductionOutput, owner.Minerals - owner.MineralMaintainance));
-                    Output = ProductionOutput;
-                    Game.printToConsole("ProductionOutput = " + ProductionOutput);
-                    Production += ProductionOutput;
-                    owner.MineralsPerTurn -= ProductionOutput;
-                    owner.Minerals -= ProductionOutput;
-                }
-            }
-        }
-        if (PlanetSpecialization != PlanetSpecializations.None)
-        {
-            owner.FoodMaintainance += 1;
         }
     }
 }

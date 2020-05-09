@@ -4,24 +4,105 @@ using UnityEngine;
 
 public class AI
 {
+    class Assignment
+    {
+        public Fleet fleet;
+        public Planet planet;
+        public float sendPercentage;
+        public Assignment(Fleet fl, Planet pl, float perc)
+        {
+            fleet = fl;
+            planet = pl;
+            sendPercentage = perc;
+        }
+    }
+
     public Galaxy gal;
     public void executeAI(Empire emp)
     {
         DetermineValues(emp);
+        HandleProduction(emp);
+        SendFleets(emp);
         Colonize(emp);
+    }
+    public void HandleProduction(Empire emp)
+    {
+        foreach (Planet pl in gal.Planets)
+        {
+            if(pl.owner != emp
+                || pl.GetProductionOutput(emp) < 1)
+            {
+                continue;
+            }
+            if (emp.MineralValue < 1)
+            {
+                pl.producing = true;
+            }
+            else
+            {
+                pl.producing = false;
+            }
+        }
+    }
+    public void SendFleets(Empire emp)
+    {
+        List<Assignment> assignment = new List<Assignment>();
+        List<Planet> servedAlready = new List<Planet>();
+        foreach (Fleet fl in gal.Fleets)
+        {
+            if (fl.owner != emp
+                || fl.destination == null
+                || fl.FleetType != FleetTypes.Combat)
+            {
+                continue;
+            }
+            servedAlready.Add(fl.destination);
+        }
+
+        foreach (Fleet fl in gal.Fleets)
+        {
+            if(fl.owner != emp
+                || fl.eta > 0
+                || fl.ShipCount < 2)
+            {
+                continue;
+            }
+            Planet highestValueShiplessTarget = null;
+            double highestValue = 0;
+            foreach(Planet pl in gal.Planets)
+            {
+                if((pl.FleetInOrbit != null && pl.FleetInOrbit.owner == emp)
+                    || servedAlready.Contains(pl))
+                {
+                    continue;
+                }
+                double currentValue = GetPlanetValue(pl, emp);
+                currentValue /= Vector3.Distance(fl.location.Location, pl.Location);
+                if(currentValue > highestValue)
+                {
+                    highestValue = currentValue;
+                    highestValueShiplessTarget = pl;
+                }
+            }
+            float percentage = (fl.ShipCount - 1.0f) / (float)fl.ShipCount;
+            Assignment ass = new Assignment(fl, highestValueShiplessTarget, percentage);
+            assignment.Add(ass);
+            servedAlready.Add(highestValueShiplessTarget);
+        }
+        foreach(Assignment ass in assignment)
+        {
+            gal.SendFleet(ass.fleet, ass.fleet.location, ass.planet, ass.sendPercentage);
+        }
     }
     public void DetermineValues(Empire emp)
     {
-        int foodgoal = 0;
         int mineralgoal = 0;
         int outposts = 1;
-        int futureFoodPerTurn = 0;
         int futureMineralsPerTurn = 0;
         foreach (Planet pl in gal.Planets)
         {
             if(pl.owner != emp)
             {
-                foodgoal += 5;
                 mineralgoal += 5;
             }
             if(pl.owner == emp)
@@ -30,20 +111,15 @@ public class AI
                 {
                     ++outposts;
                 }
-                if(pl.SwitchingToSpecialization == PlanetSpecializations.Farm)
-                {
-                    futureFoodPerTurn += Mathf.RoundToInt((float)pl.GetFoodValueMultiplier() * 2.0f);
-                }
                 if (pl.SwitchingToSpecialization == PlanetSpecializations.Mine)
                 {
-                    futureMineralsPerTurn += Mathf.RoundToInt((float)pl.GetMineralValueMultiplier() * 2.0f);
+                    futureMineralsPerTurn += pl.GetMineralValueMultiplier(emp);
                 }
             }
         }
-        emp.FoodValue = foodgoal / (emp.Food + (emp.FoodPerTurn + futureFoodPerTurn - emp.FoodMaintainance) * 10.0);
-        emp.MineralValue = mineralgoal / (emp.Minerals + (emp.MineralsPerTurn + futureMineralsPerTurn) * 10.0);
+        emp.MineralValue = mineralgoal / (emp.Minerals + (emp.MineralsPerTurn + futureMineralsPerTurn - emp.MineralMaintainance) * 10.0);
         emp.TranscenditeValue = 1;
-        emp.ResearchValue = 0;
+        emp.ResearchValue = 1;
         emp.OutpostValue = gal.GetColonyCount(emp) * 0.2f / outposts;
     }
     public void Colonize(Empire emp)
@@ -51,69 +127,89 @@ public class AI
         bool StillSeekPairings = true;
         while (StillSeekPairings)
         {
-            float bestPairDistance = Mathf.Sqrt(Mathf.Pow(gal.GalaxyWidth, 2) + Mathf.Pow(gal.GalaxyHeight, 2));
+            double bestScore = 0;
             Planet bestSource = null;
             Planet bestDestination = null;
-            foreach (Planet pl in gal.Planets)
+            int CostOfBest = 0;
+            foreach(Planet colonizationTarget in gal.Planets)
             {
-                if(pl.owner != emp)
+                if(colonizationTarget.owner == emp || gal.AlreadyBeingColonized(colonizationTarget, emp))
                 {
                     continue;
                 }
-                if(pl.PlanetSpecialization != PlanetSpecializations.Homeworld && pl.PlanetSpecialization != PlanetSpecializations.Outpost)
+                if(colonizationTarget.owner != null && (colonizationTarget.FleetInOrbit == null || colonizationTarget.FleetInOrbit != null && colonizationTarget.FleetInOrbit.owner != emp))
                 {
                     continue;
                 }
-                foreach(Planet colonizationTarget in gal.Planets)
+                Planet currentSource = null;
+                int CurrentCost = gal.GetColonizationCost(colonizationTarget, emp, out currentSource);
+                double score = PickSpecialization(colonizationTarget, emp, false) / CurrentCost;
+                if(score > bestScore && currentSource != null)
                 {
-                    if(colonizationTarget.owner != null)
-                    {
-                        continue;
-                    }
-                    float currentDistance = Vector3.Distance(pl.Location, colonizationTarget.Location);
-                    if(currentDistance < bestPairDistance)
-                    {
-                        bestPairDistance = currentDistance;
-                        bestSource = pl;
-                        bestDestination = colonizationTarget;
-                    }
+                    bestScore = score;
+                    bestSource = currentSource;
+                    bestDestination = colonizationTarget;
+                    CostOfBest = CurrentCost;
                 }
             }
-            if(bestSource == null || bestDestination == null || bestPairDistance > emp.Food || emp.Minerals < 5 || emp.Transcendite < 1)
+            if(bestSource == null || bestDestination == null || emp.Minerals < CostOfBest)
             {
                 StillSeekPairings = false;
             } 
             else
             {
                 gal.Colonize(bestDestination, emp);
-                double FoodValue = emp.FoodValue * bestDestination.GetFoodValueMultiplier();
-                double MineralValue = emp.MineralValue * bestDestination.GetMineralValueMultiplier();
-                double ResearchValue = emp.ResearchValue * bestDestination.GetResearchValueMultiplier();
-                double TranscenditeValue = emp.TranscenditeValue * bestDestination.GetTranscenditeValueMultiplier();
-                double OutpostValue = emp.OutpostValue;
-                PlanetSpecializations spec = PlanetSpecializations.None;
-                if(FoodValue >= MineralValue && FoodValue >= ResearchValue && FoodValue >= TranscenditeValue && FoodValue >= OutpostValue)
-                {
-                    spec = PlanetSpecializations.Farm;
-                }
-                if (MineralValue >= FoodValue && MineralValue >= ResearchValue && MineralValue >= TranscenditeValue && MineralValue >= OutpostValue)
-                {
-                    spec = PlanetSpecializations.Mine;
-                }
-                if (ResearchValue >= MineralValue && ResearchValue >= FoodValue && ResearchValue >= TranscenditeValue && ResearchValue >= OutpostValue)
-                {
-                    spec = PlanetSpecializations.Lab;
-                }
-                if (TranscenditeValue >= MineralValue && TranscenditeValue >= ResearchValue && TranscenditeValue >= FoodValue && TranscenditeValue >= OutpostValue)
-                {
-                    spec = PlanetSpecializations.Temple;
-                }
-                if (OutpostValue >= MineralValue && OutpostValue >= ResearchValue && OutpostValue >= FoodValue && OutpostValue >= TranscenditeValue)
-                {
-                    spec = PlanetSpecializations.Outpost;
-                }
-                gal.SwitchSpecialization(bestDestination, spec, emp);
             }
         }
+    }
+    public double PickSpecialization(Planet planet, Empire emp, bool performSwitch = true)
+    {
+        PlanetSpecializations best = PlanetSpecializations.Mine;
+        double bestScore = 0;
+        double mineScore = emp.MineralValue * planet.GetMineralValueMultiplier(emp);
+        bestScore = mineScore;
+        double researchScore = emp.ResearchValue * planet.GetResearchValueMultiplier(emp);
+        if(researchScore > bestScore)
+        {
+            bestScore = researchScore;
+            best = PlanetSpecializations.Lab;
+        }
+        double transcenditeScore = emp.TranscenditeValue * planet.GetTranscenditeValueMultiplier(emp);
+        if (transcenditeScore > bestScore)
+        {
+            bestScore = transcenditeScore;
+            best = PlanetSpecializations.Temple;
+        }
+        double outpostScore = emp.OutpostValue * planet.GetOutpostValueMultiplier(emp);
+        if (outpostScore > bestScore)
+        {
+            bestScore = outpostScore;
+            best = PlanetSpecializations.Outpost;
+        }
+        if (performSwitch)
+        {
+            gal.SwitchSpecialization(planet, best, emp);
+        }
+        return bestScore;
+    }
+    public double GetPlanetValue(Planet planet, Empire emp)
+    {
+        double value = 0;
+        if(planet.PlanetSpecialization == PlanetSpecializations.None)
+        {
+            value += Mathf.Max((float)(planet.GetMineralValueMultiplier(emp) * emp.MineralValue),
+                (float)(planet.GetOutpostValueMultiplier(emp) * emp.OutpostValue),
+                (float)(planet.GetResearchValueMultiplier(emp) * emp.ResearchValue),
+                (float)(planet.GetTranscenditeValueMultiplier(emp) * emp.TranscenditeValue));
+        }
+        else
+        {
+            value += planet.GetMineralOutput(emp) +
+                planet.GetProductionOutput(emp) +
+                planet.GetResearchOutput(emp) +
+                planet.GetTranscenditeOutput(emp);
+            value /= 2.0;
+        }
+        return value;
     }
 }

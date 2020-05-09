@@ -17,12 +17,20 @@ public class Fleet
     public FleetTypes FleetType = FleetTypes.Combat;
     public int eta;
 
-    public void Spawn(Planet planet)
+    public void Spawn(Planet planet, Planet dest = null, int shipCount = 1)
     {
         SetOwner(planet.owner);
         location = planet;
-        ShipCount = 1;
-        planet.FleetInOrbit = this;
+        ShipCount = shipCount;
+        if (dest == null)
+        {
+            planet.FleetInOrbit = this;
+        }
+        else
+        {
+            destination = dest;
+            eta = Mathf.CeilToInt(Vector3.Distance(location.Location, dest.Location));
+        }
     }
     public void SpawnColonization(Planet source, Planet dest)
     {
@@ -39,7 +47,6 @@ public class Fleet
     }
     public void processTurn()
     {
-        owner.MineralMaintainance += ShipCount;
         if(eta > 0)
         {
             eta--;
@@ -49,11 +56,47 @@ public class Fleet
                 destination = null;
                 if (FleetType == FleetTypes.Combat)
                 {
-                    location.FleetInOrbit = this;
+                    if (location.FleetInOrbit != null)
+                    {
+                        if(location.FleetInOrbit.owner == owner)
+                        {
+                            location.FleetInOrbit.ShipCount += ShipCount;
+                            ShipCount = 0;
+                            location = null;
+                        } 
+                        else
+                        { 
+                            while(ShipCount > 0 && location.FleetInOrbit != null && location.FleetInOrbit.ShipCount > 0)
+                            {
+                                ShipCount--;
+                                location.FleetInOrbit.ShipCount--;
+                                if(location.FleetInOrbit.ShipCount <= 0)
+                                {
+                                    location.FleetInOrbit = null;
+                                    break;
+                                }
+                            }
+                            if(ShipCount > 0)
+                            {
+                                location.FleetInOrbit = this;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        location.FleetInOrbit = this;
+                    }
                 }
                 else
                 {
-                    location.Colonize(owner);
+                    if (location.FleetInOrbit != null && location.FleetInOrbit.owner != owner)
+                    {
+                        ShipCount = 0;
+                    }
+                    else
+                    {
+                        location.Colonize(owner);
+                    }
                     location = null;
                 }
             }
