@@ -45,7 +45,23 @@ public class Planet
     public bool producing = false;
     public Fleet FleetInOrbit;
     public int Production;
+    public List<Empire> exploredBy = new List<Empire>();
     public bool freeSwitchAvailable = false;
+    public void Explore(Empire emp)
+    {
+        if(!exploredBy.Contains(emp))
+        {
+            exploredBy.Add(emp);
+        }
+    }
+    public void Clear()
+    {
+        owner = null;
+        PlanetSpecialization = PlanetSpecializations.None;
+        RemainingSwitchDuration = 0;
+        producing = false;
+        Production = 0;
+    }
     public void Colonize(Empire emp)
     {
         owner = emp;
@@ -180,11 +196,14 @@ public class Planet
         }
         if (RemainingSwitchDuration == 0)
         {
-            if (producing)
+            if (FleetInOrbit == null || FleetInOrbit.owner == owner)
             {
-                int prod = Mathf.Min(GetProductionOutput(owner), owner.Minerals - owner.MineralsSpentOnProductionThisTurn);
-                owner.MineralsSpentOnProductionThisTurn += prod;
-                Production += prod;
+                if (producing)
+                {
+                    int prod = Mathf.Min(GetProductionOutput(owner), owner.Minerals - owner.MineralsSpentOnProductionThisTurn);
+                    owner.MineralsSpentOnProductionThisTurn += prod;
+                    Production += prod;
+                }
             }
         }
     }

@@ -5,7 +5,6 @@ using UnityEngine;
 public enum TechTypes
 {
     FlatMinerals,
-    FlatResearch,
     FlatTranscendite,
     EmpireMineralsPerTurn,
     EmpireResearchPerTurn,
@@ -21,6 +20,7 @@ public enum TechTypes
     MineralPercentageBonus,
     ResearchPercentageBonus,
     TranscenditePercentageBonus,
+    CombatBonus,
     LastVal
 }
 public class Tech
@@ -35,7 +35,6 @@ public class Tech
         TechType = techtype;
         CostsMaintainance = hasMaintainanceCost;
         if(TechType == TechTypes.FlatMinerals
-            || TechType == TechTypes.FlatResearch
             || TechType == TechTypes.FlatTranscendite)
         {
             CostsMaintainance = false;
@@ -73,6 +72,10 @@ public class Tech
     public float GetPercentageBonus()
     {
         return 0.1f * TechLevel;
+    }
+    public float GetCombatBonus()
+    {
+        return 0.5f * TechLevel;
     }
     public void LevelUp()
     {

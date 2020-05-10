@@ -1,11 +1,13 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 
 public enum FleetTypes
 {
     Combat,
-    Colonization
+    Colonization,
+    LastVal
 }
 public class Fleet
 {
@@ -16,10 +18,35 @@ public class Fleet
     public Planet destination;
     public FleetTypes FleetType = FleetTypes.Combat;
     public int eta;
-
+    public List<Empire> VisibleTo = new List<Empire>();
+    public void ClearVisibility()
+    {
+        VisibleTo.Clear();
+    }
+    public void UpdateVisibility(Empire emp, bool visible)
+    {
+        if (emp != null)
+        {
+            if (visible)
+            {
+                if (!VisibleTo.Contains(emp))
+                {
+                    VisibleTo.Add(emp);
+                }
+            }
+            else
+            {
+                if (VisibleTo.Contains(emp))
+                {
+                    VisibleTo.Remove(emp);
+                }
+            }
+        }
+    }
     public void Spawn(Planet planet, Planet dest = null, int shipCount = 1)
     {
         SetOwner(planet.owner);
+        UpdateVisibility(planet.owner, true);
         location = planet;
         ShipCount = shipCount;
         if (dest == null)
@@ -32,18 +59,27 @@ public class Fleet
             eta = Mathf.CeilToInt(Vector3.Distance(location.Location, dest.Location));
         }
     }
-    public void SpawnColonization(Planet source, Planet dest)
+    public void SpawnTransport(Planet source, Planet dest, FleetTypes type = FleetTypes.Colonization)
     {
         SetOwner(source.owner);
         location = source;
         destination = dest;
         ShipCount = 1;
-        FleetType = FleetTypes.Colonization;
+        FleetType = type;
         eta = Mathf.CeilToInt(Vector3.Distance(source.Location, dest.Location));
     }
     public void SetOwner(Empire emp)
     {
         owner = emp;
+    }
+    public float GetPower()
+    {
+        float power = 0;
+        if(FleetType == FleetTypes.Combat)
+        {
+            power = ShipCount * (1 + owner.CombatBonus);
+        }
+        return power;
     }
     public void processTurn()
     {
@@ -68,8 +104,20 @@ public class Fleet
                         { 
                             while(ShipCount > 0 && location.FleetInOrbit != null && location.FleetInOrbit.ShipCount > 0)
                             {
-                                ShipCount--;
-                                location.FleetInOrbit.ShipCount--;
+                                float attackerPowerPerUnit = 1.0f + owner.CombatBonus;
+                                float defenderPowerPerUnit = 1.0f + location.FleetInOrbit.owner.CombatBonus;
+                                float attackerPower = ShipCount * attackerPowerPerUnit;
+                                float defenderPower = location.FleetInOrbit.ShipCount * defenderPowerPerUnit;
+                                if(attackerPower >= defenderPower)
+                                {
+                                    location.FleetInOrbit.ShipCount = 0;
+                                    ShipCount = Mathf.RoundToInt((attackerPower - defenderPower) / attackerPowerPerUnit);
+                                }
+                                else
+                                {
+                                    ShipCount = 0;
+                                    location.FleetInOrbit.ShipCount = Mathf.RoundToInt((defenderPower - attackerPower) / defenderPowerPerUnit);
+                                }
                                 if(location.FleetInOrbit.ShipCount <= 0)
                                 {
                                     location.FleetInOrbit = null;
@@ -79,12 +127,14 @@ public class Fleet
                             if(ShipCount > 0)
                             {
                                 location.FleetInOrbit = this;
+                                location.Explore(owner);
                             }
                         }
                     }
                     else
                     {
                         location.FleetInOrbit = this;
+                        location.Explore(owner);
                     }
                 }
                 else
@@ -95,7 +145,14 @@ public class Fleet
                     }
                     else
                     {
-                        location.Colonize(owner);
+                        if (location.owner == null || (location.FleetInOrbit != null && location.FleetInOrbit.owner == owner))
+                        {
+                            location.Colonize(owner);
+                        }
+                        else
+                        {
+                            location.Clear();
+                        }
                     }
                     location = null;
                 }

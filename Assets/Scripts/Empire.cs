@@ -42,6 +42,19 @@ public class Empire
     public float MineralPercentageBonus;
     public float ResearchPercentageBonus;
     public float TranscenditePercentageBonus;
+    public float CombatBonus;
+    public int HomeWorldCount;
+    public int MineCount;
+    public int LabCount;
+    public int TempleCount;
+    public int GreenCount;
+    public int BlueCount;
+    public int DryCount;
+    public int ProducerCount;
+    public int MineralsPerTurnBeforePercentageBonus;
+    public int ResearchPerTurnBeforePercentageBonus;
+    public int TranscenditePerTurnBeforePercentageBonus;
+    public int ShipCount;
 
     public void Init()
     {
@@ -54,7 +67,6 @@ public class Empire
     }
     public void ProcessTurn(Galaxy gal)
     {
-        PickRandomTech();
         RefreshPerTurnValues(gal);
         Minerals += MineralsPerTurn;
         Research += ResearchPerTurn;
@@ -72,7 +84,19 @@ public class Empire
         TranscenditePerTurn = 0;
         MineralMaintainance = 0;
         ResearchMaintainance = 0;
+        HomeWorldCount = 0;
+        MineCount = 0;
+        LabCount = 0;
+        TempleCount = 0;
+        GreenCount = 0;
+        BlueCount = 0;
+        DryCount = 0;
+        ProducerCount = 0;
+        MineralsPerTurnBeforePercentageBonus = 0;
+        ResearchPerTurnBeforePercentageBonus = 0;
+        TranscenditePerTurnBeforePercentageBonus = 0;
         GetTechBonuses();
+        ShipCount = 0;
         foreach (Planet pl in gal.Planets)
         {
             if (pl.owner == this)
@@ -91,6 +115,38 @@ public class Empire
                 {
                     MineralMaintainance += 1;
                 }
+                if (pl.PlanetSpecialization == PlanetSpecializations.Homeworld || pl.PlanetSpecialization != PlanetSpecializations.Outpost)
+                {
+                    if (pl.PlanetSpecialization == PlanetSpecializations.Homeworld)
+                    {
+                        HomeWorldCount++;
+                    }
+                    ProducerCount++;
+                }
+                if(pl.PlanetSpecialization == PlanetSpecializations.Mine)
+                {
+                    MineCount++;
+                }
+                else if (pl.PlanetSpecialization == PlanetSpecializations.Lab)
+                {
+                    LabCount++;
+                }
+                else if (pl.PlanetSpecialization == PlanetSpecializations.Temple)
+                {
+                    TempleCount++;
+                }
+                if(pl.PlanetType == PlanetTypes.Terran || pl.PlanetType == PlanetTypes.Terran)
+                {
+                    GreenCount++;
+                }
+                else if (pl.PlanetType == PlanetTypes.Ocean || pl.PlanetType == PlanetTypes.Ice)
+                {
+                    BlueCount++;
+                }
+                else if (pl.PlanetType == PlanetTypes.Desert || pl.PlanetType == PlanetTypes.Barren)
+                {
+                    DryCount++;
+                }
             }
         }
         foreach (Fleet fl in gal.Fleets)
@@ -98,11 +154,18 @@ public class Empire
             if (fl.owner == this)
             {
                 MineralMaintainance += fl.ShipCount;
+                if(fl.FleetType == FleetTypes.Combat)
+                {
+                    ShipCount += fl.ShipCount;
+                }
             }
         }
         MineralsPerTurn += EmpireMineralsPerTurn;
         ResearchPerTurn += EmpireResearchPerTurn;
         TranscenditePerTurn += EmpireTranscenditePerTurn;
+        MineralsPerTurnBeforePercentageBonus = MineralsPerTurn;
+        ResearchPerTurnBeforePercentageBonus = ResearchPerTurn;
+        TranscenditePerTurnBeforePercentageBonus = TranscenditePerTurn;
         MineralsPerTurn = Mathf.RoundToInt(MineralsPerTurn * (1.0f + MineralPercentageBonus + ExtraDifficulty));
         ResearchPerTurn = Mathf.RoundToInt(ResearchPerTurn * (1.0f + ResearchPercentageBonus + ExtraDifficulty));
         TranscenditePerTurn = Mathf.RoundToInt(TranscenditePerTurn * (1.0f + TranscenditePercentageBonus + ExtraDifficulty));
@@ -119,13 +182,6 @@ public class Empire
                     if(tech.OneTimeBonusAvailable)
                     {
                         Minerals += tech.GetFlatValue();
-                        tech.OneTimeBonusAvailable = false;
-                    }
-                    break;
-                case TechTypes.FlatResearch:
-                    if (tech.OneTimeBonusAvailable)
-                    {
-                        Research += tech.GetFlatValue();
                         tech.OneTimeBonusAvailable = false;
                     }
                     break;
@@ -178,6 +234,9 @@ public class Empire
                 case TechTypes.TranscenditePercentageBonus:
                     TranscenditePercentageBonus = tech.GetPercentageBonus();
                     break;
+                case TechTypes.CombatBonus:
+                    CombatBonus = tech.GetCombatBonus();
+                    break;
             }
         }
     }
@@ -226,6 +285,23 @@ public class Empire
         }
         return techcost;
     }
+    public Tech GetTechByType(TechTypes techtype)
+    {
+        Tech current = null;
+        foreach (Tech tech in Technologies)
+        {
+            if (tech.TechType == techtype)
+            {
+                current = tech;
+                break;
+            }
+        }
+        if (current == null)
+        {
+            current = new Tech(techtype);
+        }
+        return current;
+    }
     public Tech GetCheapestTech()
     {
         Tech cheapest = null;
@@ -264,57 +340,9 @@ public class Empire
         }
         return cheapest;
     }
-    public void PickRandomTech()
+    public bool ResearchTech(TechTypes type)
     {
-        if(isAIControlled == false)
-        {
-            return;
-        }
-        bool canTryAgain = true;
-        while (canTryAgain)
-        {
-            canTryAgain = false;
-            if (TechsToPick.Count > 0)
-            {
-                TechTypes techtype = TechsToPick[Random.Range(0, TechsToPick.Count)];
-                bool haveLowerLevelOfTech = false;
-                foreach (Tech tech in Technologies)
-                {
-                    if (tech.TechType == techtype)
-                    {
-                        haveLowerLevelOfTech = true;
-                        if (Research >= tech.GetCostOfNextLevel())
-                        {
-                            tech.LevelUp();
-                            Research -= tech.GetTechCost();
-                            Game.printToConsole(EmpireName + " has researched " + techtype + " Level " + tech.TechLevel);
-                            TechsToPick.Remove(techtype);
-                            canTryAgain = true;
-                            break;
-                        }
-                    }
-                }
-                if (haveLowerLevelOfTech == false)
-                {
-                    Tech tech = new Tech(techtype);
-                    if (Research >= tech.GetTechCost())
-                    {
-                        Technologies.Add(tech);
-                        Research -= tech.GetTechCost();
-                        Game.printToConsole(EmpireName + " has researched " + techtype + " Level " + tech.TechLevel);
-                        TechsToPick.Remove(techtype);
-                        canTryAgain = true;
-                    }
-                }
-            }
-            if (TechsToPick.Count <= 0)
-            {
-                ReshuffleTechToPick();
-            }
-        }
-    }
-    public void ResearchTech(TechTypes type)
-    {
+        bool couldAfford = false;
         bool haveLowerLevelOfTech = false;
         foreach (Tech tech in Technologies)
         {
@@ -326,6 +354,8 @@ public class Empire
                     tech.LevelUp();
                     Research -= tech.GetTechCost();
                     TechsToPick.Remove(type);
+                    couldAfford = true;
+                    Game.printToConsole(EmpireName + " researched " + type + " Level: " + tech.TechLevel);
                     ReshuffleTechToPick();
                     break;
                 }
@@ -339,8 +369,11 @@ public class Empire
                 Technologies.Add(tech);
                 Research -= tech.GetTechCost();
                 TechsToPick.Remove(type);
+                couldAfford = true;
+                Game.printToConsole(EmpireName + " researched " + type + " Level: " + tech.TechLevel);
                 ReshuffleTechToPick();
             }
         }
+        return couldAfford;
     }
 }

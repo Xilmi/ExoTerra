@@ -54,7 +54,7 @@ public class Galaxy
         empire.RulerName = "Vegany";
         empire.HomeWold = "Vega";
         empire.iD = 0;
-        empire.isAIControlled = false;
+        empire.isAIControlled = true;
         empire.empireColor = Color.green;
         Empires.Add(empire);
         Empire empire2 = new Empire();
@@ -103,8 +103,10 @@ public class Galaxy
             GameObject.Destroy(del.guiFleet);
             Fleets.Remove(del);
         }
+        int planetCount = 0;
         foreach (Planet planet in Planets)
         {
+            planetCount++;
             if (planet.owner != null)
             {
                 if(planet.freeSwitchAvailable)
@@ -159,7 +161,7 @@ public class Galaxy
                 secondHighestTranscendite = sec.Transcendite;
             }
         }
-        TranscenditeToWin = secondHighestTranscendite * 2;
+        TranscenditeToWin = Mathf.Max(secondHighestTranscendite * 2, planetCount * 5);
         updateGUI();
     }
     public int GetColonizationCost(Planet planetToColonize, Empire empireToColonize, out Planet closestBase)
@@ -193,7 +195,12 @@ public class Galaxy
             Game.printToConsole("can't colonize planet as it's already mine");
             return false;
         }
-        if(planetToColonize.owner != null && planetToColonize.owner != empireToColonize)
+        if (!planetToColonize.exploredBy.Contains(empireToColonize))
+        {
+            Game.printToConsole("can't colonize planet as it's already mine");
+            return false;
+        }
+        if (planetToColonize.owner != null && planetToColonize.owner != empireToColonize)
         {
             if(planetToColonize.FleetInOrbit == null || planetToColonize.FleetInOrbit.owner != empireToColonize)
             {
@@ -214,7 +221,7 @@ public class Galaxy
         else
         {
             Fleet colo = new Fleet();
-            colo.SpawnColonization(closestBase, planetToColonize);
+            colo.SpawnTransport(closestBase, planetToColonize);
             Fleets.Add(colo);
             parent.DrawFleets();
             empireToColonize.Minerals -= mineralCost;
@@ -235,11 +242,13 @@ public class Galaxy
             + "\nSupplies: " + Empires[0].Minerals + " (+" + Empires[0].MineralsPerTurn + " -"+Empires[0].MineralMaintainance+")"
             + "\nResearch: " + Empires[0].Research + " (+" + Empires[0].ResearchPerTurn + " -" + Empires[0].ResearchMaintainance + ")"
             + "\nScore: " + Empires[0].Transcendite + " (+" + Empires[0].TranscenditePerTurn + ")" + " / "+TranscenditeToWin+"\n"
+            + "\nMV: "+parent.player.MineralValue+"\nRV: "+ parent.player.ResearchValue + "\nTV: " + parent.player.TranscenditeValue+"\n"
             + Empires[1].EmpireName + " Score: " + Empires[1].Transcendite + " / " + TranscenditeToWin+ "\n"
             + Empires[2].EmpireName + " Score: " + Empires[2].Transcendite + " / " + TranscenditeToWin + "\n"
             + Empires[3].EmpireName + " Score: " + Empires[3].Transcendite + " / " + TranscenditeToWin + "\n";
         foreach (Planet pl in Planets)
         {
+            parent.Sprite(pl);
             if (pl.owner != Empires[0])
             {
                 Planet irrelevant;
@@ -249,25 +258,54 @@ public class Galaxy
             {
                 pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text = "\n";
             }
-            if (pl.owner == null)
+            if (pl.owner == null || !pl.exploredBy.Contains(parent.player))
             {
                 pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().color = Color.white;
                 continue;
             }
-            pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().color = pl.owner.empireColor;
             if (pl.RemainingSwitchDuration > 0)
             {
                 pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text += pl.RemainingSwitchDuration.ToString() + " - " + pl.SwitchingToSpecialization;
             }
-            else
+            else if(pl.exploredBy.Contains(parent.player))
             {
-                pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text += pl.PlanetSpecialization.ToString() + " +"+Mathf.Max(pl.GetMineralOutput(pl.owner), pl.GetResearchOutput(pl.owner), pl.GetTranscenditeOutput(pl.owner));
+                pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().color = pl.owner.empireColor;
+                if (pl.FleetInOrbit != null && pl.FleetInOrbit.owner != pl.owner)
+                {
+                    pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text += pl.PlanetSpecialization.ToString() + " Embargo";
+                }
+                else
+                {
+                    pl.guiPlanet.transform.GetChild(0).GetComponent<TextMeshPro>().text += pl.PlanetSpecialization.ToString() + " +" + Mathf.Max(pl.GetMineralOutput(pl.owner), pl.GetResearchOutput(pl.owner), pl.GetTranscenditeOutput(pl.owner), pl.GetProductionOutput(pl.owner));
+                }
             }
         }
         foreach (Fleet fl in Fleets)
         {
+            fl.ClearVisibility();
+            fl.UpdateVisibility(fl.owner, true);
+            if(fl.destination != null)
+            {
+                fl.UpdateVisibility(fl.destination.owner, true);
+                if(fl.destination.FleetInOrbit != null)
+                {
+                    fl.UpdateVisibility(fl.destination.FleetInOrbit.owner, true);
+                }
+            }
+            if(fl.location != null)
+            {
+                fl.UpdateVisibility(fl.location.owner, true);
+            }
             if (fl.guiFleet != null)
             {
+                if(fl.VisibleTo.Contains(parent.player))
+                {
+                    fl.guiFleet.SetActive(true);
+                }
+                else
+                {
+                    fl.guiFleet.SetActive(false);
+                }
                 if(fl.destination != null)
                 {
                     float distance = Vector3.Distance(fl.destination.guiPlanet.transform.localPosition, fl.location.guiPlanet.transform.localPosition);
@@ -276,7 +314,11 @@ public class Galaxy
                 }
                 if (fl.FleetType == FleetTypes.Combat)
                 {
-                    fl.guiFleet.transform.GetChild(0).GetComponent<TextMeshPro>().text = fl.ShipCount + "\n";
+                    fl.guiFleet.transform.GetChild(0).GetComponent<TextMeshPro>().text = fl.ShipCount * (1.0 + fl.owner.CombatBonus) + "\n";
+                }
+                else
+                {
+                    fl.guiFleet.transform.GetChild(0).GetComponent<TextMeshPro>().text = "COL\n";
                 }
             }
         }
@@ -322,12 +364,11 @@ public class Galaxy
             }
         }
     }
-    public void SendFleet(Fleet fleet, Planet from, Planet to, float shipPercentage = 0.5f)
+    public void SendFleet(Fleet fleet, Planet from, Planet to, int shipAmount)
     {
-        if (from != to)
+        if (from != to && shipAmount > 0)
         {
-            int shipsToSend = Mathf.CeilToInt(fleet.ShipCount * shipPercentage);
-            if (shipsToSend == fleet.ShipCount)
+            if (shipAmount == fleet.ShipCount)
             {
                 fleet.destination = to;
                 fleet.eta = Mathf.CeilToInt(Vector3.Distance(from.Location, to.Location));
@@ -335,8 +376,8 @@ public class Galaxy
             }
             else
             {
-                fleet.ShipCount = fleet.ShipCount - shipsToSend;
-                CreateFleet(fleet.owner, fleet.location, to, shipsToSend);
+                fleet.ShipCount = fleet.ShipCount - shipAmount;
+                CreateFleet(fleet.owner, fleet.location, to, shipAmount);
             }
             parent.DrawFleets();
         }
@@ -379,10 +420,6 @@ public class Galaxy
                     winner = emp;
                 }
             }
-        }
-        if(GetColonyCount(null) > 0)
-        {
-            winner = null;
         }
         return winner;
     }

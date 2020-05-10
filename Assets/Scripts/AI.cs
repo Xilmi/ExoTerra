@@ -8,12 +8,12 @@ public class AI
     {
         public Fleet fleet;
         public Planet planet;
-        public float sendPercentage;
-        public Assignment(Fleet fl, Planet pl, float perc)
+        public int amount;
+        public Assignment(Fleet fl, Planet pl, int ct)
         {
             fleet = fl;
             planet = pl;
-            sendPercentage = perc;
+            amount = ct;
         }
     }
 
@@ -21,6 +21,7 @@ public class AI
     public void executeAI(Empire emp)
     {
         DetermineValues(emp);
+        PickTechnology(emp);
         HandleProduction(emp);
         SendFleets(emp);
         Colonize(emp);
@@ -34,7 +35,7 @@ public class AI
             {
                 continue;
             }
-            if (emp.MineralValue < 1)
+            if (emp.MineralMaintainance < emp.MineralsPerTurn && emp.MineralValue < 1)
             {
                 pl.producing = true;
             }
@@ -62,8 +63,7 @@ public class AI
         foreach (Fleet fl in gal.Fleets)
         {
             if(fl.owner != emp
-                || fl.eta > 0
-                || fl.ShipCount < 2)
+                || fl.eta > 0)
             {
                 continue;
             }
@@ -76,51 +76,73 @@ public class AI
                 {
                     continue;
                 }
+                if(pl.exploredBy.Contains(emp) && pl.owner == null && pl.FleetInOrbit == null)
+                { 
+                    continue;
+                }
+                if(pl.owner == emp && pl.FleetInOrbit == null || pl.FleetInOrbit != null && pl.FleetInOrbit.owner == emp)
+                {
+                    continue;
+                }
+                if(pl.FleetInOrbit != null && pl.FleetInOrbit.owner != emp && pl.FleetInOrbit.GetPower() > fl.GetPower())
+                {
+                    continue;
+                }
                 double currentValue = GetPlanetValue(pl, emp);
-                currentValue /= Vector3.Distance(fl.location.Location, pl.Location);
-                if(currentValue > highestValue)
+                if(!pl.exploredBy.Contains(emp))
+                {
+                    Planet irrelevant;
+                    currentValue /= ((gal.GetColonizationCost(pl, emp, out irrelevant) - 5) + Vector3.Distance(fl.location.Location, pl.Location));
+                }
+                else
+                {
+                    currentValue /= Vector3.Distance(fl.location.Location, pl.Location);
+                }
+                if (currentValue > highestValue)
                 {
                     highestValue = currentValue;
                     highestValueShiplessTarget = pl;
                 }
             }
-            float percentage = (fl.ShipCount - 1.0f) / (float)fl.ShipCount;
-            Assignment ass = new Assignment(fl, highestValueShiplessTarget, percentage);
-            assignment.Add(ass);
-            servedAlready.Add(highestValueShiplessTarget);
+            int amount = fl.ShipCount;
+            if(fl.location.owner != null && fl.location.owner != fl.owner)
+            {
+                amount = fl.ShipCount - 1;
+            }
+            if (highestValueShiplessTarget != null)
+            {
+                Assignment ass = new Assignment(fl, highestValueShiplessTarget, amount);
+                assignment.Add(ass);
+                servedAlready.Add(highestValueShiplessTarget);
+            }
         }
         foreach(Assignment ass in assignment)
         {
-            gal.SendFleet(ass.fleet, ass.fleet.location, ass.planet, ass.sendPercentage);
+            gal.SendFleet(ass.fleet, ass.fleet.location, ass.planet, ass.amount);
         }
     }
     public void DetermineValues(Empire emp)
     {
-        int mineralgoal = 0;
-        int outposts = 1;
-        int futureMineralsPerTurn = 0;
+        emp.RefreshPerTurnValues(gal);
+        float mineralgoal = 0;
+        float productionCapacity = 0;
         foreach (Planet pl in gal.Planets)
         {
-            if(pl.owner != emp)
+            if(pl.owner != emp && pl.exploredBy.Contains(emp))
             {
-                mineralgoal += 5;
+                Planet irrelevant;
+                mineralgoal += gal.GetColonizationCost(pl, emp, out irrelevant);
             }
             if(pl.owner == emp)
             {
-                if(pl.PlanetSpecialization == PlanetSpecializations.Outpost || pl.SwitchingToSpecialization == PlanetSpecializations.Outpost)
-                {
-                    ++outposts;
-                }
-                if (pl.SwitchingToSpecialization == PlanetSpecializations.Mine)
-                {
-                    futureMineralsPerTurn += pl.GetMineralValueMultiplier(emp);
-                }
+                productionCapacity += pl.GetProductionOutput(emp);
             }
         }
-        emp.MineralValue = mineralgoal / (emp.Minerals + (emp.MineralsPerTurn + futureMineralsPerTurn - emp.MineralMaintainance) * 10.0);
-        emp.TranscenditeValue = 1;
-        emp.ResearchValue = 1;
-        emp.OutpostValue = gal.GetColonyCount(emp) * 0.2f / outposts;
+        mineralgoal += productionCapacity;
+        emp.MineralValue = Mathf.Max(mineralgoal, 15) / Mathf.Max(1, (emp.Minerals));
+        emp.TranscenditeValue = Mathf.Max(1.0f, (float)gal.TranscenditeToWin / Mathf.Max(gal.Planets.Count * 5, ((float)emp.Transcendite * 2)));
+        emp.ResearchValue = Mathf.Max(1.0f, emp.ResearchMaintainance * 2.0f / Mathf.Max(1.0f, emp.ResearchPerTurn));
+        emp.OutpostValue = (emp.MineralsPerTurn - emp.MineralMaintainance) / Mathf.Max(1.0f, productionCapacity);
     }
     public void Colonize(Empire emp)
     {
@@ -133,11 +155,19 @@ public class AI
             int CostOfBest = 0;
             foreach(Planet colonizationTarget in gal.Planets)
             {
+                if(!colonizationTarget.exploredBy.Contains(emp))
+                {
+                    continue;
+                }
                 if(colonizationTarget.owner == emp || gal.AlreadyBeingColonized(colonizationTarget, emp))
                 {
                     continue;
                 }
                 if(colonizationTarget.owner != null && (colonizationTarget.FleetInOrbit == null || colonizationTarget.FleetInOrbit != null && colonizationTarget.FleetInOrbit.owner != emp))
+                {
+                    continue;
+                }
+                if(colonizationTarget.owner == null && colonizationTarget.FleetInOrbit != null && colonizationTarget.FleetInOrbit.owner != emp)
                 {
                     continue;
                 }
@@ -195,7 +225,7 @@ public class AI
     public double GetPlanetValue(Planet planet, Empire emp)
     {
         double value = 0;
-        if(planet.PlanetSpecialization == PlanetSpecializations.None)
+        if(planet.PlanetSpecialization == PlanetSpecializations.None || !planet.exploredBy.Contains(emp))
         {
             value += Mathf.Max((float)(planet.GetMineralValueMultiplier(emp) * emp.MineralValue),
                 (float)(planet.GetOutpostValueMultiplier(emp) * emp.OutpostValue),
@@ -208,8 +238,92 @@ public class AI
                 planet.GetProductionOutput(emp) +
                 planet.GetResearchOutput(emp) +
                 planet.GetTranscenditeOutput(emp);
-            value /= 2.0;
         }
         return value;
+    }
+    public double GetTechScore(Empire emp, TechTypes type)
+    {
+        double score = 0;
+        float cost = emp.GetTechCostByType(type);
+        Tech tech = new Tech(type);
+        double roiMod = 3;
+        switch (type)
+        {
+            case TechTypes.FlatMinerals:
+                score = (tech.GetFlatValue() * emp.MineralValue) / (tech.GetTechCost() * emp.ResearchValue);
+                break;
+            case TechTypes.FlatTranscendite:
+                score = (tech.GetFlatValue() * emp.TranscenditeValue) / (tech.GetTechCost() * emp.ResearchValue);
+                break;
+            case TechTypes.EmpireMineralsPerTurn:
+                score = tech.GetEmpireValuePerTurn() * emp.MineralValue * roiMod / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.EmpireResearchPerTurn:
+                score = tech.GetEmpireValuePerTurn() * emp.ResearchValue * roiMod / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.EmpireTranscenditePerTurn:
+                score = tech.GetEmpireValuePerTurn() * emp.TranscenditeValue * roiMod / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.HomeWorldBonus:
+                score = tech.GetSimpleBonus() * emp.HomeWorldCount * roiMod * (emp.MineralValue + emp.ResearchValue + emp.TranscenditeValue + emp.OutpostValue) / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.MineMineralBonus:
+                score = tech.GetSimpleBonus() * emp.MineCount * roiMod * emp.MineralValue / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.LabResearchBonus:
+                score = tech.GetSimpleBonus() * emp.LabCount * roiMod * emp.ResearchValue / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.TempleTranscenditeBonus:
+                score = tech.GetSimpleBonus() * emp.TempleCount * roiMod * emp.TranscenditeValue / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.ProductionBonus:
+                score = tech.GetSimpleBonus() * emp.ProducerCount * roiMod * emp.OutpostValue / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.GreenPlanetBonus:
+                score = tech.GetSimpleBonus() * emp.GreenCount * roiMod * emp.MineralValue / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.BluePlanetBonus:
+                score = tech.GetSimpleBonus() * emp.BlueCount * roiMod * emp.ResearchValue/ (cost * emp.ResearchValue);
+                break;
+            case TechTypes.DryPlanetBonus:
+                score = tech.GetSimpleBonus() * emp.DryCount * roiMod * emp.TranscenditeValue / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.MineralPercentageBonus:
+                score = emp.MineralsPerTurnBeforePercentageBonus * tech.GetPercentageBonus() * roiMod * emp.MineralValue / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.ResearchPercentageBonus:
+                score = emp.ResearchPerTurnBeforePercentageBonus * tech.GetPercentageBonus() * roiMod * emp.ResearchValue / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.TranscenditePercentageBonus:
+                score = emp.TranscenditePerTurnBeforePercentageBonus * tech.GetPercentageBonus() * roiMod * emp.TranscenditeValue / (cost * emp.ResearchValue);
+                break;
+            case TechTypes.CombatBonus:
+                score = emp.ShipCount * tech.GetCombatBonus() / (cost * emp.ResearchValue);
+                break;
+        }
+        return score;
+    }
+    public void PickTechnology(Empire emp)
+    {
+        bool couldAfford = true;
+        while (couldAfford)
+        {
+            couldAfford = false;
+            double highestScore = 0;
+            TechTypes techToPick = TechTypes.LastVal;
+            foreach (TechTypes techtype in emp.TechsToPick)
+            {
+                double currentScore = GetTechScore(emp, techtype);
+                if (currentScore > highestScore)
+                {
+                    techToPick = techtype;
+                    highestScore = currentScore;
+                }
+            }
+            if (techToPick != TechTypes.LastVal && emp.Research >= emp.GetTechCostByType(techToPick))
+            {
+                couldAfford = emp.ResearchTech(techToPick);
+            }
+        }
     }
 }
