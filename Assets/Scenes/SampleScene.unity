@@ -333,6 +333,8 @@ MonoBehaviour:
   colonyShipTemplate: {fileID: 7865925163843034402, guid: eba4497b28bb3eb4d84c236f2d7bf84e,
     type: 3}
   SelectionTemplate: {fileID: 1890776841}
+  lineTemplate: {fileID: 3857040260462466746, guid: 0d9d54a1583595f4789d0df947b4a8ab,
+    type: 3}
   buttonPrefab: {fileID: 632977012590023444, guid: 6ed6be13ad9aa05488b0969dbf76016a,
     type: 3}
   controlPanel: {fileID: 1453257339}

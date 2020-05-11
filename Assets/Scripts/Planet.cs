@@ -12,6 +12,7 @@ public enum PlanetSizes
 }
 public enum PlanetTypes
 {
+    Urban,
     Terran,
     Ocean,
     Desert,
@@ -65,6 +66,10 @@ public class Planet
     public void Colonize(Empire emp)
     {
         owner = emp;
+        if(PlanetType == PlanetTypes.Urban)
+        {
+            PlanetSpecialization = PlanetSpecializations.Homeworld;
+        }
         if (PlanetSpecialization == PlanetSpecializations.None)
         {
             freeSwitchAvailable = true;
@@ -183,6 +188,8 @@ public class Planet
     {
         changeOwner(homeWorldOf);
         PlanetSpecialization = PlanetSpecializations.Homeworld;
+        PlanetType = PlanetTypes.Urban;
+        PlanetSize = PlanetSizes.Medium;
     }
     public void processTurn()
     {

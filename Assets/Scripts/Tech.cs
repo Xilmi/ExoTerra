@@ -4,8 +4,6 @@ using UnityEngine;
 
 public enum TechTypes
 {
-    FlatMinerals,
-    FlatTranscendite,
     EmpireMineralsPerTurn,
     EmpireResearchPerTurn,
     EmpireTranscenditePerTurn,
@@ -34,11 +32,6 @@ public class Tech
         TechLevel = 1;
         TechType = techtype;
         CostsMaintainance = hasMaintainanceCost;
-        if(TechType == TechTypes.FlatMinerals
-            || TechType == TechTypes.FlatTranscendite)
-        {
-            CostsMaintainance = false;
-        }
     }
     public int GetTechCost(int extraLevels = 0)
     {

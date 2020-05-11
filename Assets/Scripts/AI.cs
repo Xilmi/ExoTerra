@@ -35,7 +35,12 @@ public class AI
             {
                 continue;
             }
-            if (emp.MineralMaintainance < emp.MineralsPerTurn && emp.MineralValue < 1)
+            float defenderStrength = 0;
+            if(pl.FleetInOrbit != null && pl.FleetInOrbit.owner == emp)
+            {
+                defenderStrength = pl.FleetInOrbit.GetPower();
+            }
+            if (emp.MineralMaintainance < emp.MineralsPerTurn && (emp.ProduceShipValue > 1 || GetIncomingEnemyStrength(pl, emp) > defenderStrength))
             {
                 pl.producing = true;
             }
@@ -71,16 +76,17 @@ public class AI
             double highestValue = 0;
             foreach(Planet pl in gal.Planets)
             {
-                if((pl.FleetInOrbit != null && pl.FleetInOrbit.owner == emp)
+                float incomingEnemyStrength = GetIncomingEnemyStrength(pl, emp);
+                if ((pl.FleetInOrbit != null && pl.FleetInOrbit.owner == emp)
                     || servedAlready.Contains(pl))
                 {
                     continue;
                 }
-                if(pl.exploredBy.Contains(emp) && pl.owner == null && pl.FleetInOrbit == null)
+                if(pl.exploredBy.Contains(emp) && pl.owner == null && pl.FleetInOrbit == null && incomingEnemyStrength == 0)
                 { 
                     continue;
                 }
-                if(pl.owner == emp && pl.FleetInOrbit == null || pl.FleetInOrbit != null && pl.FleetInOrbit.owner == emp)
+                if(pl.owner == emp && pl.FleetInOrbit == null && incomingEnemyStrength == 0 || pl.FleetInOrbit != null && pl.FleetInOrbit.owner == emp)
                 {
                     continue;
                 }
@@ -89,10 +95,11 @@ public class AI
                     continue;
                 }
                 double currentValue = GetPlanetValue(pl, emp);
-                if(!pl.exploredBy.Contains(emp))
+                Planet irrelevant;
+                int colCost = gal.GetColonizationCost(pl, emp, out irrelevant);
+                if (!pl.exploredBy.Contains(emp) && colCost > 0)
                 {
-                    Planet irrelevant;
-                    currentValue /= ((gal.GetColonizationCost(pl, emp, out irrelevant) - 5) + Vector3.Distance(fl.location.Location, pl.Location));
+                    currentValue /= ((colCost - 5) + Vector3.Distance(fl.location.Location, pl.Location));
                 }
                 else
                 {
@@ -104,10 +111,10 @@ public class AI
                     highestValueShiplessTarget = pl;
                 }
             }
-            int amount = fl.ShipCount;
+            int amount = Mathf.FloorToInt((fl.GetPower() - GetIncomingEnemyStrength(fl.location, emp)) / (1.0f + emp.CombatBonus));
             if(fl.location.owner != null && fl.location.owner != fl.owner)
             {
-                amount = fl.ShipCount - 1;
+                amount = amount - 1;
             }
             if (highestValueShiplessTarget != null)
             {
@@ -139,8 +146,9 @@ public class AI
             }
         }
         mineralgoal += productionCapacity;
-        emp.MineralValue = Mathf.Max(mineralgoal, 15) / Mathf.Max(1, (emp.Minerals));
-        emp.TranscenditeValue = Mathf.Max(1.0f, (float)gal.TranscenditeToWin / Mathf.Max(gal.Planets.Count * 5, ((float)emp.Transcendite * 2)));
+        emp.MineralValue = Mathf.Max(1.0f, Mathf.Max(mineralgoal, 15) / Mathf.Max(1, (emp.Minerals)));
+        emp.ProduceShipValue = 1.0 / (Mathf.Max(mineralgoal, 15) / Mathf.Max(1, (emp.Minerals)));
+        emp.TranscenditeValue = Mathf.Max(1.0f, (float)gal.HighestTranscendite / Mathf.Max((float)emp.Transcendite));
         emp.ResearchValue = Mathf.Max(1.0f, emp.ResearchMaintainance * 2.0f / Mathf.Max(1.0f, emp.ResearchPerTurn));
         emp.OutpostValue = (emp.MineralsPerTurn - emp.MineralMaintainance) / Mathf.Max(1.0f, productionCapacity);
     }
@@ -249,12 +257,6 @@ public class AI
         double roiMod = 3;
         switch (type)
         {
-            case TechTypes.FlatMinerals:
-                score = (tech.GetFlatValue() * emp.MineralValue) / (tech.GetTechCost() * emp.ResearchValue);
-                break;
-            case TechTypes.FlatTranscendite:
-                score = (tech.GetFlatValue() * emp.TranscenditeValue) / (tech.GetTechCost() * emp.ResearchValue);
-                break;
             case TechTypes.EmpireMineralsPerTurn:
                 score = tech.GetEmpireValuePerTurn() * emp.MineralValue * roiMod / (cost * emp.ResearchValue);
                 break;
@@ -325,5 +327,25 @@ public class AI
                 couldAfford = emp.ResearchTech(techToPick);
             }
         }
+    }
+    public float GetIncomingEnemyStrength(Planet pl, Empire emp)
+    {
+        float incomingStrength = 0;
+        List<Fleet> incoming = gal.GetIncomingFleets(pl);
+        foreach(Fleet fl in incoming)
+        {
+            if(fl.owner != emp && fl.VisibleTo.Contains(emp))
+            {
+                if (fl.FleetType == FleetTypes.Combat)
+                {
+                    incomingStrength += fl.GetPower();
+                }
+                else
+                {
+                    incomingStrength += 1;
+                }
+            }
+        }
+        return incomingStrength;
     }
 }

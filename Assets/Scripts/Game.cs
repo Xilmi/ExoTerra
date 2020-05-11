@@ -38,6 +38,10 @@ public class Game : MonoBehaviour
         string SpriteString = "planet_085";
         if (planet.exploredBy.Contains(player))
         {
+            if (planet.PlanetType == PlanetTypes.Urban)
+            {
+                SpriteString = "planet_067";
+            }
             if (planet.PlanetType == PlanetTypes.Terran)
             {
                 SpriteString = "planet_045";
@@ -75,8 +79,6 @@ public class Game : MonoBehaviour
         translator.AddAssignment(TechTypes.EmpireMineralsPerTurn.ToString(), "+3 supplies output");
         translator.AddAssignment(TechTypes.EmpireResearchPerTurn.ToString(), "+3 research output");
         translator.AddAssignment(TechTypes.EmpireTranscenditePerTurn.ToString(), "+3 spirituality output");
-        translator.AddAssignment(TechTypes.FlatMinerals.ToString(), "convert research to twice the amount of supplies");
-        translator.AddAssignment(TechTypes.FlatTranscendite.ToString(), "convert research to twice the amount of spirituality");
         translator.AddAssignment(TechTypes.HomeWorldBonus.ToString(), "+1 to all outputs on homeworlds");
         translator.AddAssignment(TechTypes.MineMineralBonus.ToString(), "+1 supply per mine");
         translator.AddAssignment(TechTypes.LabResearchBonus.ToString(), "+1 research per lab");
@@ -209,7 +211,7 @@ public class Game : MonoBehaviour
                         }
                     }
                 }
-                else if (Input.GetMouseButtonDown(1))
+                else if (Input.GetMouseButtonDown(0))
                 {
                     CenterView(Camera.main.ScreenToWorldPoint(Input.mousePosition));
                 }
@@ -290,7 +292,8 @@ public class Game : MonoBehaviour
             else
             {
                 produceButton.SetActive(false);
-                if (Galaxy.AlreadyBeingColonized(lastSelected, Galaxy.Empires[0]))
+                Planet dummy;
+                if (Galaxy.AlreadyBeingColonized(lastSelected, Galaxy.Empires[0]) || Galaxy.GetColonizationCost(lastSelected, player, out dummy) == 0)
                 {
                     specButton.SetActive(false);
                 }
@@ -484,7 +487,11 @@ public class Game : MonoBehaviour
             {
                 GameObject go = Instantiate(buttonPrefab);
                 go.transform.SetParent(researchPicker.transform);
-                go.GetComponentInChildren<Text>().text = translator.GetTextFor(techtype.ToString()) + " "+ Galaxy.Empires[0].GetTechCostByType(techtype)+" ("+ Galaxy.Empires[0].GetTechCostByType(techtype, true)+")"+ " AI-Score: "+AI.GetTechScore(player, techtype);
+                go.GetComponentInChildren<Text>().text = translator.GetTextFor(techtype.ToString()) + " "+ Galaxy.Empires[0].GetTechCostByType(techtype)+" ("+ Galaxy.Empires[0].GetTechCostByType(techtype, true)+")";
+                if(player.isAIControlled)
+                {
+                    go.GetComponentInChildren<Text>().text += " AI-Score: " + AI.GetTechScore(player, techtype);
+                }
                 go.name = techtype.ToString();
                 go.GetComponent<Button>().onClick.AddListener(() => OnButtonClick(go.name));
             }

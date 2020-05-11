@@ -23,6 +23,7 @@ public class Empire
     public double ResearchValue;
     public double TranscenditeValue;
     public double OutpostValue;
+    public double ProduceShipValue;
     public Color empireColor;
     public bool isAIControlled;
     public List<Tech> Technologies;
@@ -178,20 +179,6 @@ public class Empire
             ResearchMaintainance += tech.GetMaintainanceCost();
             switch(tech.TechType)
             {
-                case TechTypes.FlatMinerals:
-                    if(tech.OneTimeBonusAvailable)
-                    {
-                        Minerals += tech.GetFlatValue();
-                        tech.OneTimeBonusAvailable = false;
-                    }
-                    break;
-                case TechTypes.FlatTranscendite:
-                    if (tech.OneTimeBonusAvailable)
-                    {
-                        Transcendite += tech.GetFlatValue();
-                        tech.OneTimeBonusAvailable = false;
-                    }
-                    break;
                 case TechTypes.EmpireMineralsPerTurn:
                     EmpireMineralsPerTurn = tech.GetEmpireValuePerTurn();
                     break;
